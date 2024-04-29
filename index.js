@@ -12,7 +12,6 @@ wss.on('connection', (ws) => {
     // Send a message to the client
     ws.on('message', (message) => {
         console.log('Received: %s', message);
-        ws.send('Hello! I received your message');
 
         let obj;
         // Check if the message is a JSON object
@@ -21,18 +20,27 @@ wss.on('connection', (ws) => {
             console.log('Received object: %o', obj);
         } catch (e) {
             console.log('Message is not a JSON object');
-            return;
         }
 
         // Check if the object is not null and has a 'type' property
-        if (obj && obj.hasOwnProperty('type') && obj.type === 'test') {
-            ws.send('Received test object thx!');
-            // Send a message to another server on 8081
-            const client = new WebSocket('ws://localhost:8081/dbcom');
-            client.on('open', () => {
-                client.send(JSON.stringify(obj));
-                client.close();
-            });
+        if (obj && obj.hasOwnProperty('type')) {
+            if (obj.type === 'test' || obj.type === 'request') {
+                ws.send(`Received ${obj.type}`);
+                // Send a message to another server on 8081
+                const client = new WebSocket('ws://localhost:8081/dbcom');
+                client.on('open', () => {
+                    client.send(JSON.stringify(obj));
+                });
+            }
+
+            if (obj.type === 'response') {
+                console.log('Received response');
+                const respServ = new WebSocket('ws://localhost:8082/response');
+                respServ.on('open', () => {
+                    console.log('Sending response to 8082');
+                    respServ.send(JSON.stringify(obj));
+                });
+            }
         }
     });
 });
