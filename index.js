@@ -1,51 +1,55 @@
-const WebSocket = require('ws');
+const WebSocket = require("ws");
+const DOMParser = require("xmldom").DOMParser;
 
-// Create a WebSocket server
 const wss = new WebSocket.Server({ port: 8080 }, () => {
-    console.log('Server started on port 8080');
+  console.log("Server started on port 8080");
 });
 
-// Handle incoming connections
-wss.on('connection', (ws) => {
-    console.log('Client connected');
-    
-    // Send a message to the client
-    ws.on('message', (message) => {
-        console.log('Received: %s', message);
+wss.on("connection", (ws) => {
+  console.log("Client connected");
 
-        let obj;
-        // Check if the message is a JSON object
-        try {
-            obj = JSON.parse(message);
-            console.log('Received object: %o', obj);
-        } catch (e) {
-            console.log('Message is not a JSON object');
-        }
+  ws.on("message", (message) => {
+    const msg = message.toString();
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(msg, "text/xml");
 
-        // Check if the object is not null and has a 'type' property
-        if (obj && obj.hasOwnProperty('type')) {
-            if (obj.type === 'test' || obj.type === 'request') {
-                ws.send(`Received ${obj.type}`);
-                // Send a message to another server on 8081
-                const client = new WebSocket('ws://localhost:8081/dbcom');
-                client.on('open', () => {
-                    client.send(JSON.stringify(obj));
-                });
-            }
+    console.log("***".repeat(10));
+    console.log("Received:\n%s", msg);
 
-            if (obj.type === 'response') {
-                console.log('Received response');
-                const respServ = new WebSocket('ws://localhost:8082/response');
-                respServ.on('open', () => {
-                    console.log('Sending response to 8082');
-                    respServ.send(JSON.stringify(obj));
-                });
-            }
-        }
-    });
+    // Check if the message is a valid XML document
+    if (xmlDoc.documentElement.nodeName === "parsererror") {
+      console.log("Invalid XML document");
+      return;
+    }
+
+    // Get the root element
+    const root = xmlDoc.documentElement;
+
+    // Check if the root element is not null and has a 'type' element
+    if (root && root.getElementsByTagName("type").length > 0) {
+      const type = root.getElementsByTagName("type")[0].childNodes[0].nodeValue;
+      console.log("Type: %s", type);
+
+      if (type === "test" || type === "request") {
+        ws.send(`Received ${type}`);
+        const client = new WebSocket("ws://localhost:8081/dbcom");
+        client.on("open", () => {
+          client.send(msg);
+        });
+      }
+
+      if (type === "response") {
+        console.log("Received response");
+        const respServ = new WebSocket("ws://localhost:8082/response");
+        respServ.on("open", () => {
+          console.log("Sending response to 8082");
+          respServ.send(msg);
+        });
+      }
+    }
+  });
 });
 
-// Handle server listening
-wss.on('listening', () => {
-    console.log('Server is listening');
+wss.on("listening", () => {
+  console.log("Server is listening");
 });
